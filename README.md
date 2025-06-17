@@ -177,7 +177,7 @@ cd examples && go run example_usage.go
 
 ## 📄 Licencja
 
-Projekt jest udostępniony na zasadach open source. Specyfikacja EPP jest własnością odpowiednich autorów systemu Subiekt GT.
+Program na licencji APACHE 2.0
 
 ## 🐛 Zgłaszanie błędów
 
