@@ -353,25 +353,35 @@ func ParseEPPFile(filename string, options ParseOptions) (*EPPData, error) {
 	return ParseEPPFromString(content, options)
 }
 
+func ConvertEPPDataToJSON(eppData *EPPData) (jsonData []byte, err error) {
+	jsonData, err = json.MarshalIndent(eppData, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("błąd podczas konwersji do JSON: %v", err)
+	}
+	return jsonData, nil
+}
+
 // ConvertEPPToJSON konwertuje plik EPP na JSON i zapisuje do pliku
-func ConvertEPPToJSON(inputFile, outputFile string, options ParseOptions) error {
+func ConvertEPPToJSON(inputFile string, options ParseOptions) (jsonData []byte, err error) {
 	// Parsuj plik EPP
 	eppData, err := ParseEPPFile(inputFile, options)
 	if err != nil {
-		return fmt.Errorf("błąd podczas parsowania pliku EPP: %v", err)
+		return nil, fmt.Errorf("błąd podczas parsowania pliku EPP: %v", err)
 	}
 
 	// Konwertuj do JSON
-	jsonData, err := json.MarshalIndent(eppData, "", "  ")
+	jsonData, err = json.MarshalIndent(eppData, "", "  ")
 	if err != nil {
-		return fmt.Errorf("błąd podczas konwersji do JSON: %v", err)
+		return nil, fmt.Errorf("błąd podczas konwersji do JSON: %v", err)
 	}
 
+	return jsonData, nil
+}
+func WriteJSONToFile(jsonData []byte, outputFile string) error {
 	// Zapisz do pliku
 	if err := os.WriteFile(outputFile, jsonData, 0644); err != nil {
 		return fmt.Errorf("błąd podczas zapisu pliku: %v", err)
 	}
-
 	return nil
 }
 

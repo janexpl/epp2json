@@ -28,10 +28,11 @@ func main() {
 	}
 
 	// Konwertuj plik
-	err := epp2json.ConvertEPPToJSON(inputFile, outputFile, options)
+	jsonData, err := epp2json.ConvertEPPToJSON(inputFile, options)
 	if err != nil {
 		log.Fatal("Błąd konwersji:", err)
 	}
+	epp2json.WriteJSONToFile(jsonData, outputFile)
 
 	// Pobierz statystyki
 	eppData, err := epp2json.ParseEPPFile(inputFile, options)
