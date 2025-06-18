@@ -62,6 +62,14 @@ type ParseOptions struct {
 	IncludeFZ bool // Czy dołączać faktury zakupowe
 	IncludeFS bool // Czy dołączać faktury sprzedażowe
 }
+type Section struct {
+	Header  string
+	Content string
+}
+type EPPSections struct {
+	Info     string
+	Sections []Section
+}
 
 // DefaultParseOptions zwraca domyślne opcje parsowania (wszystkie typy faktur)
 func DefaultParseOptions() ParseOptions {
@@ -88,6 +96,47 @@ func ParseFloat(str string) float64 {
 		return val
 	}
 	return 0.0
+}
+func ParseSections(input string) EPPSections {
+	const (
+		headerTag  = "[NAGLOWEK]"
+		contentTag = "[ZAWARTOSC]"
+		infoTag    = "[INFO]"
+	)
+
+	var sections []Section
+	var info string
+	// rozbijamy tekst po każdym wystąpieniu tagu [NAGLOWEK]
+	blocks := strings.Split(input, headerTag)
+	// pierwszy blok przed pierwszym [NAGLOWEK] odrzucamy
+	if len(blocks) > 0 {
+		prefix := blocks[0]
+		if idx := strings.Index(prefix, infoTag); idx >= 0 {
+			// wszystko po [INFO] do końca prefixu to nasz info
+			info = strings.TrimSpace(prefix[idx+len(infoTag):])
+		}
+	}
+	for _, block := range blocks[1:] {
+		// szukamy w nim [ZAWARTOSC]
+		idx := strings.Index(block, contentTag)
+		if idx < 0 {
+			// brak tagu [ZAWARTOSC] – pomijamy
+			continue
+		}
+		// wszystko przed [ZAWARTOSC] to header
+		header := strings.TrimSpace(block[:idx])
+		// wszystko po [ZAWARTOSC] to content
+		content := strings.TrimSpace(block[idx+len(contentTag):])
+		sections = append(sections, Section{
+			Header:  header,
+			Content: content,
+		})
+	}
+
+	return EPPSections{
+		Info:     info,
+		Sections: sections,
+	}
 }
 
 // ParseCSVLine parsuje linię CSV z obsługą cudzysłowów
@@ -223,68 +272,58 @@ func ParseItem(fields []string) InvoiceItem {
 
 // ParseEPPFromString parsuje zawartość pliku EPP z stringa
 func ParseEPPFromString(content string, options ParseOptions) (*EPPData, error) {
-	lines := strings.Split(content, "\n")
-
+	sections := ParseSections(content)
 	eppData := &EPPData{
 		Info:     make(map[string]string),
 		Invoices: []Invoice{},
 	}
 
 	currentInvoice := Invoice{}
-	currentSection := ""
+	info := sections.Info
+	fields := ParseCSVLine(info)
+	// Parse info
+	if len(fields) >= 2 {
+		eppData.Info["version"] = fields[0]
+		if len(fields) > 3 {
+			eppData.Info["system"] = fields[3]
+		}
+		if len(fields) > 5 {
+			eppData.Info["company"] = fields[5]
+		}
+	}
 
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	for _, section := range sections.Sections {
+		line := strings.TrimSpace(section.Header)
 		if line == "" {
 			continue
 		}
-
-		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-			currentSection = line
-			continue
-		}
-
 		fields := ParseCSVLine(line)
+		// Sprawdź czy to faktura FZ lub FS
+		if len(fields) > 0 {
+			invoiceType := fields[0]
+			fmt.Println("Invoice type: ", invoiceType)
+			shouldInclude := (invoiceType == "FZ" || invoiceType == "KFZ" && options.IncludeFZ) ||
+				(invoiceType == "FS" || invoiceType == "KFS" && options.IncludeFS)
 
-		switch currentSection {
-		case "[INFO]":
-			// Parsuj informacje ogólne
-			if len(fields) >= 2 {
-				eppData.Info["version"] = fields[0]
-				if len(fields) > 3 {
-					eppData.Info["system"] = fields[3]
+			if shouldInclude {
+				// Jeśli już mamy fakturę, dodaj ją do listy
+				if currentInvoice.Type != "" {
+					eppData.Invoices = append(eppData.Invoices, currentInvoice)
 				}
-				if len(fields) > 5 {
-					eppData.Info["company"] = fields[5]
-				}
-			}
 
-		case "[NAGLOWEK]":
-			// Sprawdź czy to faktura FZ lub FS
-			if len(fields) > 0 {
-				invoiceType := fields[0]
-				shouldInclude := (invoiceType == "FZ" && options.IncludeFZ) ||
-					(invoiceType == "FS" && options.IncludeFS)
-
-				if shouldInclude {
-					// Jeśli już mamy fakturę, dodaj ją do listy
-					if currentInvoice.Type != "" {
-						eppData.Invoices = append(eppData.Invoices, currentInvoice)
-					}
-
-					// Parsuj nowy nagłówek
-					currentInvoice = ParseHeader(fields)
-					currentInvoice.Items = []InvoiceItem{}
+				// Parsuj nowy nagłówek
+				currentInvoice = ParseHeader(fields)
+				currentInvoice.Items = []InvoiceItem{}
+				fields = ParseCSVLine(section.Content)
+				// Parsuj pozycje faktury
+				if currentInvoice.Type != "" {
+					item := ParseItem(fields)
+					currentInvoice.Items = append(currentInvoice.Items, item)
 				}
 			}
 
-		case "[ZAWARTOSC]":
-			// Parsuj pozycje faktury
-			if currentInvoice.Type != "" {
-				item := ParseItem(fields)
-				currentInvoice.Items = append(currentInvoice.Items, item)
-			}
 		}
+
 	}
 
 	// Dodaj ostatnią fakturę
