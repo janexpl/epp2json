@@ -2,6 +2,7 @@
 package epp2json
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -140,37 +141,15 @@ func ParseSections(input string) EPPSections {
 }
 
 // ParseCSVLine parsuje linię CSV z obsługą cudzysłowów
-func ParseCSVLine(line string) []string {
+func ParseCSVLine(line string) ([]string, error) {
 	var result []string
-	var current strings.Builder
-	inQuotes := false
-
-	for i, char := range line {
-		switch char {
-		case '"':
-			if inQuotes && i+1 < len(line) && line[i+1] == '"' {
-				// Podwójny cudzysłów - dodaj jeden
-				current.WriteRune('"')
-				i++ // Pomiń następny cudzysłów
-			} else {
-				// Przełącz stan cudzysłowów
-				inQuotes = !inQuotes
-			}
-		case ',':
-			if inQuotes {
-				current.WriteRune(char)
-			} else {
-				result = append(result, current.String())
-				current.Reset()
-			}
-		default:
-			current.WriteRune(char)
-		}
+	reader := csv.NewReader(strings.NewReader(line))
+	result, err := reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("błąd czytania CSV: %v", err)
 	}
 
-	// Dodaj ostatnie pole
-	result = append(result, current.String())
-	return result
+	return result, nil
 }
 
 // ParseHeader parsuje nagłówek faktury z pól CSV
@@ -216,23 +195,23 @@ func ParseHeader(fields []string) Invoice {
 	if len(fields) > 23 {
 		invoice.SaleDate = ParseDate(fields[23])
 	}
+	if len(fields) > 27 {
+		invoice.NetAmount = ParseFloat(fields[27])
+	}
 	if len(fields) > 28 {
-		invoice.NetAmount = ParseFloat(fields[28])
+		invoice.VatAmount = ParseFloat(fields[28])
 	}
 	if len(fields) > 29 {
-		invoice.VatAmount = ParseFloat(fields[29])
+		invoice.GrossAmount = ParseFloat(fields[29])
 	}
-	if len(fields) > 30 {
-		invoice.GrossAmount = ParseFloat(fields[30])
+	if len(fields) > 34 {
+		invoice.PaymentDate = ParseDate(fields[34])
 	}
-	if len(fields) > 35 {
-		invoice.PaymentDate = ParseDate(fields[35])
+	if len(fields) > 41 {
+		invoice.Registrar = fields[41]
 	}
-	if len(fields) > 42 {
-		invoice.Registrar = fields[42]
-	}
-	if len(fields) > 47 {
-		invoice.Currency = fields[47]
+	if len(fields) > 46 {
+		invoice.Currency = fields[46]
 	}
 
 	return invoice
@@ -280,7 +259,10 @@ func ParseEPPFromString(content string, options ParseOptions) (*EPPData, error) 
 
 	currentInvoice := Invoice{}
 	info := sections.Info
-	fields := ParseCSVLine(info)
+	fields, err := ParseCSVLine(info)
+	if err != nil {
+		return nil, fmt.Errorf("błąd podczas parsowania info: %v", err)
+	}
 	// Parse info
 	if len(fields) >= 2 {
 		eppData.Info["version"] = fields[0]
@@ -297,11 +279,13 @@ func ParseEPPFromString(content string, options ParseOptions) (*EPPData, error) 
 		if line == "" {
 			continue
 		}
-		fields := ParseCSVLine(line)
+		fields, err := ParseCSVLine(line)
+		if err != nil {
+			return nil, fmt.Errorf("błąd podczas parsowania nagłówka: %v", err)
+		}
 		// Sprawdź czy to faktura FZ lub FS
 		if len(fields) > 0 {
 			invoiceType := fields[0]
-			fmt.Println("Invoice type: ", invoiceType)
 			shouldInclude := (invoiceType == "FZ" || invoiceType == "KFZ" && options.IncludeFZ) ||
 				(invoiceType == "FS" || invoiceType == "KFS" && options.IncludeFS)
 
@@ -314,7 +298,10 @@ func ParseEPPFromString(content string, options ParseOptions) (*EPPData, error) 
 				// Parsuj nowy nagłówek
 				currentInvoice = ParseHeader(fields)
 				currentInvoice.Items = []InvoiceItem{}
-				fields = ParseCSVLine(section.Content)
+				fields, err = ParseCSVLine(section.Content)
+				if err != nil {
+					return nil, fmt.Errorf("błąd podczas parsowania pozycji: %v", err)
+				}
 				// Parsuj pozycje faktury
 				if currentInvoice.Type != "" {
 					item := ParseItem(fields)
