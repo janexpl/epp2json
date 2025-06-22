@@ -216,23 +216,23 @@ func ParseHeader(fields []string) Invoice {
 	if len(fields) > 23 {
 		invoice.SaleDate = ParseDate(fields[23])
 	}
-	if len(fields) > 26 {
-		invoice.NetAmount = ParseFloat(fields[26])
-	}
-	if len(fields) > 27 {
-		invoice.VatAmount = ParseFloat(fields[27])
-	}
 	if len(fields) > 28 {
-		invoice.GrossAmount = ParseFloat(fields[28])
+		invoice.NetAmount = ParseFloat(fields[28])
+	}
+	if len(fields) > 29 {
+		invoice.VatAmount = ParseFloat(fields[29])
 	}
 	if len(fields) > 30 {
-		invoice.PaymentDate = ParseDate(fields[30])
+		invoice.GrossAmount = ParseFloat(fields[30])
 	}
-	if len(fields) > 38 {
-		invoice.Currency = fields[38]
+	if len(fields) > 35 {
+		invoice.PaymentDate = ParseDate(fields[35])
 	}
 	if len(fields) > 42 {
 		invoice.Registrar = fields[42]
+	}
+	if len(fields) > 47 {
+		invoice.Currency = fields[47]
 	}
 
 	return invoice
