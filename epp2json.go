@@ -31,6 +31,7 @@ type Invoice struct {
 	PostalCode         string        `json:"kod_pocztowy"`
 	Address            string        `json:"adres"`
 	NIP                string        `json:"nip"`
+	Category           string        `json:"category"`
 	NetAmount          float64       `json:"kwota_netto"`
 	VatAmount          float64       `json:"kwota_vat"`
 	GrossAmount        float64       `json:"kwota_brutto"`
@@ -185,6 +186,9 @@ func ParseHeader(fields []string) Invoice {
 	}
 	if len(fields) > 17 {
 		invoice.NIP = fields[17]
+	}
+	if len(fields) > 18 {
+		invoice.Category = fields[18]
 	}
 	if len(fields) > 21 {
 		invoice.Date = ParseDate(fields[21])
