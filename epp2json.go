@@ -187,8 +187,8 @@ func ParseHeader(fields []string) Invoice {
 	if len(fields) > 17 {
 		invoice.NIP = fields[17]
 	}
-	if len(fields) > 19 {
-		invoice.Category = fields[19]
+	if len(fields) > 18 {
+		invoice.Category = fields[18]
 	}
 	if len(fields) > 21 {
 		invoice.Date = ParseDate(fields[21])
