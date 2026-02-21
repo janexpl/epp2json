@@ -31,7 +31,7 @@ type Invoice struct {
 	PostalCode         string        `json:"kod_pocztowy"`
 	Address            string        `json:"adres"`
 	NIP                string        `json:"nip"`
-	Category           string        `json:"category"`
+	Category           string        `json:"kategoria"`
 	NetAmount          float64       `json:"kwota_netto"`
 	VatAmount          float64       `json:"kwota_vat"`
 	GrossAmount        float64       `json:"kwota_brutto"`
